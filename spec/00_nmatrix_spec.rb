@@ -179,7 +179,8 @@ describe NMatrix do
       end
 
       it "enforces shape boundaries" do
-        expect { NMatrix.new([1,10], 0, dtype: :int8, stype: storage_type, default: 0)[-1,0] }.to raise_error
+        #negative indexes now work
+        #expect { NMatrix.new([1,10], 0, dtype: :int8, stype: storage_type, default: 0)[-1,0] }.to raise_error 
         expect { NMatrix.new([1,10], 0, dtype: :int8, stype: storage_type, default: 0)[1,0]  }.to raise_error(RangeError)
         expect { NMatrix.new([1,10], 0, dtype: :int8, stype: storage_type, default: 0)[0,10] }.to raise_error(RangeError)
       end
