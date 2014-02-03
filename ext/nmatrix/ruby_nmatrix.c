@@ -2569,7 +2569,7 @@ static SLICE* get_slice(size_t dim, int argc, VALUE* arg, size_t* shape) {
       slice->lengths[r] = 1;
 
     } else if (FIXNUM_P(v)) { // this used CLASS_OF before, which is inefficient for fixnum
-      int va = FIX2INT(v)
+      int va = FIX2INT(v);
       if(va<0) // checking for negative indexes
         slice->coords[r]  = shape[r]+va;
       else
@@ -2605,7 +2605,7 @@ static SLICE* get_slice(size_t dim, int argc, VALUE* arg, size_t* shape) {
       int b = FIX2INT(beg);
       int e = FIX2INT(end);
       if (b >= 0) 
-      	slice->coords[r]  = b);
+      	slice->coords[r]  = b;
       else 
       	slice->coords[r]  = shape[r] + b;
       // Exclude last element for a...b range
