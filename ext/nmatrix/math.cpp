@@ -140,6 +140,7 @@
 #include "math/rot.h"
 #include "math/rotg.h"
 #include "math/math.h"
+#include "math/lange.h"
 #include "storage/dense/dense.h"
 
 #include "nmatrix.h"
@@ -188,6 +189,7 @@ extern "C" {
   static VALUE nm_lapack_gesvd(VALUE self, VALUE jobu, VALUE jobvt, VALUE m, VALUE n, VALUE a, VALUE lda, VALUE s, VALUE u, VALUE ldu, VALUE vt, VALUE ldvt, VALUE lworkspace_size);
   static VALUE nm_lapack_gesdd(VALUE self, VALUE jobz, VALUE m, VALUE n, VALUE a, VALUE lda, VALUE s, VALUE u, VALUE ldu, VALUE vt, VALUE ldvt, VALUE lworkspace_size);
   static VALUE nm_lapack_geev(VALUE self, VALUE compute_left, VALUE compute_right, VALUE n, VALUE a, VALUE lda, VALUE w, VALUE wi, VALUE vl, VALUE ldvl, VALUE vr, VALUE ldvr, VALUE lwork);
+  static VALUE nm_lapack_lange(VALUE self, VALUE norm, VALUE m, VALUE n, VALUE a, VALUE lda, VALUE work);
 } // end of extern "C" block
 
 ////////////////////
@@ -382,7 +384,7 @@ extern "C" {
 ///////////////////
 
 void nm_math_init_blas() {
-	cNMatrix_LAPACK = rb_define_module_under(cNMatrix, "LAPACK");
+  cNMatrix_LAPACK = rb_define_module_under(cNMatrix, "LAPACK");
 
   rb_define_singleton_method(cNMatrix, "has_clapack?", (METHOD)nm_has_clapack, 0);
 
@@ -401,6 +403,7 @@ void nm_math_init_blas() {
   rb_define_singleton_method(cNMatrix_LAPACK, "lapack_gesvd", (METHOD)nm_lapack_gesvd, 12);
   rb_define_singleton_method(cNMatrix_LAPACK, "lapack_gesdd", (METHOD)nm_lapack_gesdd, 11);
   rb_define_singleton_method(cNMatrix_LAPACK, "lapack_geev",  (METHOD)nm_lapack_geev,  12);
+  rb_define_singleton_method(cNMatrix_LAPACK, "lapack_lange",  (METHOD)nm_lapack_lange, 6);
 
   cNMatrix_BLAS = rb_define_module_under(cNMatrix, "BLAS");
 
@@ -409,12 +412,26 @@ void nm_math_init_blas() {
   rb_define_singleton_method(cNMatrix_BLAS, "cblas_rot",  (METHOD)nm_cblas_rot,  7);
   rb_define_singleton_method(cNMatrix_BLAS, "cblas_rotg", (METHOD)nm_cblas_rotg, 1);
 
-	rb_define_singleton_method(cNMatrix_BLAS, "cblas_gemm", (METHOD)nm_cblas_gemm, 14);
-	rb_define_singleton_method(cNMatrix_BLAS, "cblas_gemv", (METHOD)nm_cblas_gemv, 11);
-	rb_define_singleton_method(cNMatrix_BLAS, "cblas_trsm", (METHOD)nm_cblas_trsm, 12);
-	rb_define_singleton_method(cNMatrix_BLAS, "cblas_trmm", (METHOD)nm_cblas_trmm, 12);
-	rb_define_singleton_method(cNMatrix_BLAS, "cblas_syrk", (METHOD)nm_cblas_syrk, 11);
-	rb_define_singleton_method(cNMatrix_BLAS, "cblas_herk", (METHOD)nm_cblas_herk, 11);
+  rb_define_singleton_method(cNMatrix_BLAS, "cblas_gemm", (METHOD)nm_cblas_gemm, 14);
+  rb_define_singleton_method(cNMatrix_BLAS, "cblas_gemv", (METHOD)nm_cblas_gemv, 11);
+  rb_define_singleton_method(cNMatrix_BLAS, "cblas_trsm", (METHOD)nm_cblas_trsm, 12);
+  rb_define_singleton_method(cNMatrix_BLAS, "cblas_trmm", (METHOD)nm_cblas_trmm, 12);
+  rb_define_singleton_method(cNMatrix_BLAS, "cblas_syrk", (METHOD)nm_cblas_syrk, 11);
+  rb_define_singleton_method(cNMatrix_BLAS, "cblas_herk", (METHOD)nm_cblas_herk, 11);
+}
+
+/*
+ * Interprets lapack lange arguments, for which LAPACK needs character values M, S, O, or F.
+ *
+ * Called by lapack_lange -- basically inline. svd stands for singular value decomposition.
+ */
+static inline char lapack_lange_sym(VALUE op) {
+  if (rb_to_id(op) == rb_intern("m") || rb_to_id(op) == rb_intern("M")) return 'M';
+  else if (rb_to_id(op) == rb_intern("1") || rb_to_id(op) == rb_intern("o") || rb_to_id(op) == rb_intern("O")) return 'O';
+  else if (rb_to_id(op) == rb_intern("i") || rb_to_id(op) == rb_intern("I")) return 'I';
+  else if (rb_to_id(op) == rb_intern("f") || rb_to_id(op) == rb_intern("F")|| rb_to_id(op) == rb_intern("e") || rb_to_id(op) == rb_intern("E")) return 'F';
+  else rb_raise(rb_eArgError, "Expected yoyo");
+  return 'M';
 }
 
 /*
@@ -430,8 +447,6 @@ static inline char lapack_svd_job_sym(VALUE op) {
   else rb_raise(rb_eArgError, "Expected :all, :return, :overwrite, :none (or :a, :s, :o, :n, respectively)");
   return 'a';
 }
-
-
 /*
  * Interprets lapack jobvl and jobvr arguments, for which LAPACK needs character values N or V.
  *
@@ -1198,6 +1213,36 @@ static VALUE nm_lapack_geev(VALUE self, VALUE compute_left, VALUE compute_right,
 }
 
 
+static VALUE nm_lapack_lange(VALUE self, VALUE norm, VALUE m, VALUE n, VALUE a, VALUE lda, VALUE work) {
+  static double (*lange_table[nm::NUM_DTYPES])(char, int, int, void* a, int, void* work) = {
+    NULL, NULL, NULL, NULL, NULL, // no integer ops
+    nm::math::lapack_lange<float>,
+    nm::math::lapack_lange<double>,
+    nm::math::lapack_lange<nm::Complex64>,
+    nm::math::lapack_lange<nm::Complex128>,
+    NULL, NULL, NULL, NULL // no rationals or Ruby objects
+  };
+
+  nm::dtype_t dtype = NM_DTYPE(a);
+
+  if (!lange_table[dtype]) {
+    rb_raise(rb_eNotImpError, "This operation not yet implemented for non-BLAS dtypes");
+    return Qfalse;
+  } else {
+    int M = FIX2INT(m);
+    int N = FIX2INT(n);
+
+    char norm_type= lapack_lange_sym(norm);
+
+    // only need rwork for complex matrices
+
+    void* work = NM_ALLOCA_N(char, DTYPE_SIZES[dtype] * 2*n);
+
+    void* A  = NM_STORAGE_DENSE(a)->elements;
+
+    return lange_table[dtype](norm_type, M, N, A, FIX2INT(lda),work );
+  }
+}
 /*
  * Based on LAPACK's dscal function, but for any dtype.
  *

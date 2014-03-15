@@ -132,6 +132,11 @@ class NMatrix
         clapack_laswp(matrix.shape[0], matrix, matrix.shape[1], 0, ipiv.size-1, ipiv, 1)
       end
 
+      def lange(matrix,norm)
+        work=NMatrix.new(matrix.shape[0], dtype: matrix.dtype)
+        NMatrix::LAPACK::lapack_lange(norm,matrix.shape[0], matrix.shape[1],matrix,matrix.shape[0],work)
+      end
+
       def alloc_svd_result(matrix)
         [
           NMatrix.new(matrix.shape[0], dtype: matrix.dtype),
@@ -172,6 +177,7 @@ class NMatrix
         NMatrix::LAPACK::lapack_gesdd(:a, matrix.shape[0], matrix.shape[1], matrix, matrix.shape[0], result[1], result[0], matrix.shape[0], result[2], matrix.shape[1], workspace_size)
         result
       end
+
 
     end
   end

@@ -56,6 +56,10 @@ class NMatrix
     self
   end
 
+  def lange(norm='i')
+    NMatrix::LAPACK::lange(self,norm)
+  end
+
   #
   # call-seq:
   #     invert -> NMatrix
@@ -256,6 +260,7 @@ class NMatrix
   def laswp(ary)
     self.clone.laswp!(ary)
   end
+
 
   #
   # call-seq:
