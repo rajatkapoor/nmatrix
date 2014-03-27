@@ -835,13 +835,11 @@ STORAGE* nm_dense_storage_copy_transposed(const STORAGE* rhs_base) {
   nm_dense_storage_register(rhs);
   size_t *shape = NM_ALLOC_N(size_t, rhs->dim);
 
-  // swap shape and offset
+  // swap shape
   shape[0] = rhs->shape[1];
   shape[1] = rhs->shape[0];
 
   DENSE_STORAGE *lhs = nm_dense_storage_create(rhs->dtype, shape, rhs->dim, NULL, 0);
-  lhs->offset[0] = rhs->offset[1];
-  lhs->offset[1] = rhs->offset[0];
 
   nm_dense_storage_register(lhs);
 
@@ -914,8 +912,6 @@ void ref_slice_copy_transposed(const DENSE_STORAGE* rhs, DENSE_STORAGE* lhs) {
 
   LDType* lhs_els = reinterpret_cast<LDType*>(lhs->elements);
   RDType* rhs_els = reinterpret_cast<RDType*>(rhs->elements);
-  size_t dim = lhs->dim;
-  memset(lhs->offset, 0, sizeof(size_t)*dim);
   size_t count = nm_storage_count_max_elements(lhs);;
   size_t* temp_coords = NM_ALLOCA_N(size_t, lhs->dim);
   size_t coord_swap_temp;
